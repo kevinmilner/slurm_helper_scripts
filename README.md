@@ -79,3 +79,27 @@ To watch the output of that command, use `wqtail` and hit ctrl+c to exit when yo
 ## Cancel all jobs (regardless of state): scancel_me.sh
 
 To quickly cancel all jobs (running, queued, or otherwise), run `scancel_me.sh`
+
+## See how many nodes are in use (and by whom) in a given queue: queue_check.py
+
+To see how many nodes are in use in a given queue, and who is using them, use the `queue_check.py <queue>` command:
+
+```
+[kmilner@endeavour1 ~]$ queue_check.py scec
+1 users running 3 jobs on 33 nodes, 0 queued jobs
+user: kmilner,	running: 3 (33 nodes),	queued: 0
+Total nodes in use: 33
+```
+
+If you also want to see details of all jobs submitted by all users to that queue, prepend the `--full` argument:
+
+```
+[kmilner@endeavour1 ~]$ queue_check.py --full scec
+1 users running 3 jobs on 33 nodes, 0 queued jobs
+user: kmilner,	running: 3 (33 nodes),	queued: 0
+Total nodes in use: 33
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+          19336848      scec cat_bbp_  kmilner  R    1:07:19     16 e19-[24-39]
+          19336847      scec cat_bbp_  kmilner  R    5:31:13     16 e19-[06,08,10,40-48],e20-[01-04]
+          19347546      scec du_repor  kmilner  R      58:23      1 e19-12
+```
