@@ -1,4 +1,4 @@
-# slurm_helper_scripts
+# Kevin's SLURM helper scripts
 
 Helper scripts for submitting and monitoring SLURM batch jobs.
 
@@ -8,7 +8,7 @@ For example, if you are using BASH and you cloned it to `$HOME/git/slurm_helper_
 
 `PATH=$PATH:$HOME/git/slurm_helper_scripts`
 
-## Submitting Jobs: slurm_submit.sh
+## Submitting jobs: slurm_submit.sh
 
 This script submits SLURM batch scripts with PBS-like STDOUT and STDERR files: `<script-name>.o<job-ID>` and `<script-name>.e<job-ID>`. I like this much better than the SLURM default of just `slurm-<job-ID>.out`, which can get confusing when you have multiple slurm scripts in one directory.
 
@@ -34,8 +34,26 @@ If you want to watch the output of that command, use `wqme` instead (w for watch
 
 To tail STDOUT (see what your job is printing to the console), use `stdout_job_tail.sh`. You can supply a job ID, or omit and the first running job will be found. When you're done, hit ctrl+c to exit.
 
-## Watch submitted job status and also tail STDOUT
+## See (or watch) submitted job status and also tail STDOUT
 
-To see the the state of your submitted jobs, and also the most recent STDOUT of a running job, use `qtail`.
+To see the the state of your submitted jobs, and also the most recent STDOUT of a running job, use `qtail`. It will automatically limit the printed STDOUT so that it does not exceed the number of lines in your terminal.
+
+```
+[kmilner@endeavour1 slurm_helper_scripts]$ qtail
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+          19336848      scec cat_bbp_  kmilner  R      22:56     16 e19-[24-39]
+          19336847      scec cat_bbp_  kmilner  R    4:46:50     16 e19-[06,08,10,40-48],e20-[01-04]
+          19347546      scec du_repor  kmilner  R      14:00      1 e19-12
+
+==> ... 24_01_22-rundir5696_subduction-all-m6.5-skipYears2000-noHF-vmCENTRAL_JAPAN-standardSitesNZ-griddedSitesNZ/cat_bbp_parallel.slurm.o19336847 <==
+
+[22:29:43.206 (e19-10.hpc.usc.edu) Process 2]: waiting for other processes with Barrier()
+[22:29:43.205 DispatcherThread]: checking if we're all done...
+[22:29:43.205 (e19-06.hpc.usc.edu) Process 0]: running async post-batch hook for process 2. running=28, queued=0, finished=403
+[22:29:43.205 DispatcherThread]: not yet. waiting on: 4,5,7
+[22:29:43.205 DispatcherThread]: waiting for READY message.
+[22:29:43.205 (e19-06.hpc.usc.edu) Process 0]: async post-batch estimates: rate: 49.95 tasks/s, time for running: 560.56 ms
+[22:29:44.247 (e19-06.hpc.usc.edu) Process 0]: done running async post-batch hook for process 2. running=28, queued=0, finished=403
+```
 
 To watch the output of that command, use `wqtail` and hit ctrl+c to exit when you're done.
