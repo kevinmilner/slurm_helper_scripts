@@ -14,7 +14,25 @@ This script submits SLURM batch scripts with PBS-like STDOUT and STDERR files: `
 
 For example, if you were to submit a script called script.slurm with this tool and the assigned job ID is 1111, then STDOUT could be found in `script.slurm.o1111` and STDERR could be found in `script.slurm.e1111`.
 
-## See running jobs
+## Submit a job with a dependency: slurm_depend_submit.sh
+
+To submit a job with a dependency on another job, use `slurm_depend_submit.sh`. The submitted job will wait until the supplied dependencies complete successfully.
+
+It takes a SLURM script as the first argument, and the Job ID('s) it depends on as the 2nd argument. Multiple dependencies can be specified as <jobID11>:<jobID2>:<jobIDN>. Alternatively, if you omit the Job ID argument, the most recently submitted script with the slurm_submit.sh command will be used as the dependency.
+
+Single job dependency on job 111:
+
+`slurm_depend_submit.sh dependent_job.slurm 111`
+
+Multiple job dependency on jobs 111 and 112:
+
+`slurm_depend_submit.sh dependent_job.slurm 111:112`
+
+Single job dependency on the most recent job you submitted with `slurm_submit.sh`:
+
+`slurm_depend_submit.sh dependent_job.slurm`
+
+## See running jobs: qme or wqme
 
 Use the `qme` command (q for see the queue, me for me/you) to see running jobs:
 
@@ -30,11 +48,11 @@ This is just a handy alias for `squeue -u $USER`
 
 If you want to watch the output of that command, use `wqme` instead (w for watch). When you're done, hit ctrl+c to exit. This is just a handy alias for `watch -n 10 squeue -u $USER`
 
-## Tail STDOUT
+## Tail STDOUT: stdout_job_tail.sh
 
 Once a job is running, to tail STDOUT (see what your job is printing to the console), use `stdout_job_tail.sh`. You can supply a job ID, or omit and the first running job will be found. When you're done, hit ctrl+c to exit.
 
-## See (or watch) submitted job status and also tail STDOUT
+## See (or watch) submitted job status and also tail STDOUT: qtail or wqtail
 
 To see the the state of your submitted jobs, and also the most recent STDOUT of a running job, use `qtail`. It will automatically limit the printed STDOUT so that it does not exceed the number of lines in your terminal.
 
@@ -57,3 +75,7 @@ To see the the state of your submitted jobs, and also the most recent STDOUT of 
 ```
 
 To watch the output of that command, use `wqtail` and hit ctrl+c to exit when you're done.
+
+## Cancel all jobs (regardless of state): scancel_me.sh
+
+To quickly cancel all jobs (running, queued, or otherwise), run `scancel_me.sh`
