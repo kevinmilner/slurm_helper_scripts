@@ -10,7 +10,7 @@ For example, if you are using BASH and you cloned it to `$HOME/git/slurm_helper_
 
 ## Submitting jobs: slurm_submit.sh
 
-This script submits SLURM batch scripts with PBS-like STDOUT and STDERR files: `<script-name>.o<job-ID>` and `<script-name>.e<job-ID>`. I like this much better than the SLURM default of just `slurm-<job-ID>.out`, which can get confusing when you have multiple slurm scripts in one directory.
+This script submits SLURM batch scripts with PBS-like STDOUT and STDERR files: `<script-name>.o<job-ID>` and `<script-name>.e<job-ID>`. I like this much better than the SLURM default of just `slurm-<job-ID>.out`, which can get confusing when you have multiple SLURM scripts in one directory.
 
 For example, if you were to submit a script called script.slurm with this tool and the assigned job ID is 1111, then STDOUT could be found in `script.slurm.o1111` and STDERR could be found in `script.slurm.e1111`.
 
@@ -32,7 +32,7 @@ If you want to watch the output of that command, use `wqme` instead (w for watch
 
 ## Tail STDOUT
 
-To tail STDOUT (see what your job is printing to the console), use `stdout_job_tail.sh`. You can supply a job ID, or omit and the first running job will be found. When you're done, hit ctrl+c to exit.
+Once a job is running, to tail STDOUT (see what your job is printing to the console), use `stdout_job_tail.sh`. You can supply a job ID, or omit and the first running job will be found. When you're done, hit ctrl+c to exit.
 
 ## See (or watch) submitted job status and also tail STDOUT
 
