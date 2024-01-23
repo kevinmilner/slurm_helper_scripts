@@ -54,7 +54,7 @@ Once a job is running, to tail STDOUT (see what your job is printing to the cons
 
 ## See (or watch) submitted job status and also tail STDOUT: qtail or wqtail
 
-To see the the state of your submitted jobs, and also the most recent STDOUT of a running job, use `qtail`. It will automatically limit the printed STDOUT so that it does not exceed the number of lines in your terminal.
+To see the state of your submitted jobs, and also the most recent STDOUT of a running job, use `qtail`. It will automatically limit the printed STDOUT so that it does not exceed the number of lines in your terminal.
 
 ```
 [kmilner@endeavour1 slurm_helper_scripts]$ qtail
