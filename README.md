@@ -6,7 +6,7 @@ To use, clone this git repository on the HPC system you intend to use and add th
 
 For example, if you are using BASH and you cloned it to `$HOME/git/slurm_helper_scripts`, then you would add this to your `$HOME/.bashrc` file (and then log out and back in):
 
-`PATH=$PATH:$HOME/git/slurm_helper_scripts`
+`export PATH=$PATH:$HOME/git/slurm_helper_scripts`
 
 ## Submitting jobs: slurm_submit.sh
 
