@@ -26,8 +26,8 @@ for FILE in $@;do
 	if [[ $# -gt 1 ]];then
 		echo $FILE
 	fi
-	DIR=`dirname ${1}`
-	SCRIPT=`basename ${1}`
+	DIR=`dirname $FILE`
+	SCRIPT=`basename $FILE`
 	
 	if [[ ! -d $DIR ]];then
 		echo "$DIR doesn't exist"
