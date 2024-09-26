@@ -9,7 +9,7 @@ if [[ ! -e $1 ]];then
 	exit 2
 fi
 
-OUT_SLURM_ID_FILE=~/.slurm_depend_submit_prev_id
+SLURM_ID_FILE=~/.slurm_depend_submit_prev_id
 
 if [[ -e $SLURM_ID_FILE ]];then
 	JOB_ID=`cat $SLURM_ID_FILE`
@@ -18,6 +18,6 @@ if [[ -e $SLURM_ID_FILE ]];then
 	$DIR/slurm_depend_submit.sh $1 $JOB_ID
 	exit $?
 else
-	echo "Cannot chain dependencies becasuse none found in $OUT_SLURM_ID_FILE; did you submit with slurm_depend_submit.sh?"
+	echo "Cannot chain dependencies becasuse none found in $SLURM_ID_FILE; did you submit with slurm_depend_submit.sh?"
 	exit 1
 fi
