@@ -5,6 +5,8 @@ if [[ ! -e $1 ]];then
 	exit 2
 fi
 
+OUT_SLURM_ID_FILE=~/.slurm_depend_submit_prev_id
+
 DIR=`dirname ${1}`
 SCRIPT=`basename ${1}`
 
@@ -32,5 +34,15 @@ if [[ ! -z $SLURM_ACCT ]];then
 	ACCT_ARG="-A $SLURM_ACCT"
 fi
 
-sbatch $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j --dependency=afterok:$JOB_ID $SCRIPT
-exit $?
+OUTPUT=`sbatch $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j --dependency=afterok:$JOB_ID $SCRIPT`
+RET=$?
+
+echo $OUTPUT
+if [[ $RET -eq 0 ]];then
+	JOB_ID=`echo $OUTPUT | awk '{print $4}'`
+	if [[ $JOB_ID -gt 0 ]];then
+		echo $JOB_ID > $OUT_SLURM_ID_FILE
+	fi
+fi
+
+exit $RET

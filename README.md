@@ -32,6 +32,10 @@ Single job dependency on the most recent job you submitted with `slurm_submit.sh
 
 `slurm_depend_submit.sh dependent_job.slurm`
 
+If you want to chain dependencies and instead submit a job dependent on the most recent job you submitted with `slurm_depend_submit.sh`, use `slurm_chained_depend_submit.sh`:
+
+`slurm_chained_depend_submit.sh dependent_job.slurm`
+
 ## See running jobs: qme or wqme
 
 Use the `qme` command (q for see the queue, me for me/you) to see running jobs:
