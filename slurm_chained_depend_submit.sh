@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ ! $# -ne 1 ]];then
+if [[ $# -ne 1 ]];then
 	echo "USAGE: <script.slurm>"
 	exit 2;
 fi
