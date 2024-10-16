@@ -58,7 +58,7 @@ Once a job is running, to tail STDOUT (see what your job is printing to the cons
 
 You can apply custom formatting to the output by setting the `SQUEUE_FORMAT` environmental variable (e.g., in your `$HOME/.bashrc script`). See [documentation on the syntax here](https://slurm.schedmd.com/squeue.html#OPT_format); I like this one:
 
-export SQUEUE_FORMAT="%.12i %.9P %.30j %.8u %.2t %.10M %.6D %R"
+`export SQUEUE_FORMAT="%.12i %.9P %.30j %.8u %.2t %.10M %.6D %R"`
 
 ## See (or watch) submitted job status and also tail STDOUT: qtail or wqtail
 
