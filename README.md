@@ -18,7 +18,7 @@ For example, if you were to submit a script called script.slurm with this tool a
 
 To submit a job with a dependency on another job, use `slurm_depend_submit.sh`. The submitted job will wait until the supplied dependencies complete successfully.
 
-It takes a SLURM script as the first argument, and the Job ID('s) it depends on as the 2nd argument. Multiple dependencies can be specified as <jobID11>:<jobID2>:<jobIDN>. Alternatively, if you omit the Job ID argument, the most recently submitted script with the slurm_submit.sh command will be used as the dependency.
+It takes a SLURM script as the first argument, and the Job ID('s) it depends on as the 2nd argument. Multiple dependencies can be specified as `<jobID11>:<jobID2>:<jobIDN>`. Alternatively, if you omit the Job ID argument, the most recently submitted script with the `slurm_submit.sh` command will be used as the dependency.
 
 Single job dependency on job 111:
 
@@ -55,6 +55,10 @@ If you want to watch the output of that command, use `wqme` instead (w for watch
 ## Tail STDOUT: stdout_job_tail.sh
 
 Once a job is running, to tail STDOUT (see what your job is printing to the console), use `stdout_job_tail.sh`. You can supply a job ID, or omit and the first running job will be found. When you're done, hit ctrl+c to exit.
+
+You can apply custom formatting to the output by setting the `SQUEUE_FORMAT` environmental variable (e.g., in your `$HOME/.bashrc script`). See [documentation on the syntax here](https://slurm.schedmd.com/squeue.html#OPT_format); I like this one:
+
+export SQUEUE_FORMAT="%.12i %.9P %.30j %.8u %.2t %.10M %.6D %R"
 
 ## See (or watch) submitted job status and also tail STDOUT: qtail or wqtail
 
