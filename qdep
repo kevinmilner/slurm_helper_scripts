@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Maps: parent -> (list of dependents)
+declare -A deps
+# Maps: jobID -> squeue line (preserves your SQUEUE_FORMAT)
+declare -A info
+
+# Collect job info
+while IFS= read -r jobid; do
+    info["$jobid"]="$(squeue --me --noheader -j "$jobid")"
+
+    # Extract dependency job IDs from 'scontrol show job'
+    dep_line=$(scontrol show job "$jobid" | grep -o 'Dependency=[^ ]*')
+    [[ -z "$dep_line" ]] && continue
+
+    # Extract all job IDs from dependency spec (e.g., afterok:802285)
+    dep_ids=$(echo "$dep_line" | grep -oE '[0-9]+')
+    for parent in $dep_ids; do
+        deps["$parent"]+="$jobid "
+    done
+done < <(squeue --me --noheader -o "%i")
+
+# Recursive function to print tree
+print_tree() {
+    local job=$1
+    local indent="$2"
+    echo "${indent}${info[$job]}"
+    for child in ${deps[$job]}; do
+        print_tree "$child" "    $indent"
+    done
+}
+
+# Print top-level jobs (those not dependent on anything else)
+for job in "${!info[@]}"; do
+    # Job is a root if it's not listed as a dependent anywhere
+    is_root=true
+    for children in "${deps[@]}"; do
+        if grep -qw "$job" <<< "$children"; then
+            is_root=false
+            break
+        fi
+    done
+    $is_root && print_tree "$job" ""
+done
+
