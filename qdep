@@ -2,44 +2,103 @@
 
 # Maps: parent -> (list of dependents)
 declare -A deps
-# Maps: jobID -> squeue line (preserves your SQUEUE_FORMAT)
 declare -A info
 
 # Collect job info
 while IFS= read -r jobid; do
     info["$jobid"]="$(squeue --me --noheader -j "$jobid")"
 
-    # Extract dependency job IDs from 'scontrol show job'
-    dep_line=$(scontrol show job "$jobid" | grep -o 'Dependency=[^ ]*')
-    [[ -z "$dep_line" ]] && continue
+    dep_field=$(scontrol show job "$jobid" | grep -o 'Dependency=[^ ]*')
+    [[ -z "$dep_field" ]] && continue
 
-    # Extract all job IDs from dependency spec (e.g., afterok:802285)
-    dep_ids=$(echo "$dep_line" | grep -oE '[0-9]+')
+    dep_ids=$(echo "$dep_field" | grep -oE '[0-9]+')
     for parent in $dep_ids; do
         deps["$parent"]+="$jobid "
     done
 done < <(squeue --me --noheader -o "%i")
 
-# Recursive function to print tree
-print_tree() {
-    local job=$1
-    local indent="$2"
-    echo "${indent}${info[$job]}"
-    for child in ${deps[$job]}; do
-        print_tree "$child" "    $indent"
+# Determine max tree depth for proper alignment
+max_depth=0
+find_depth() {
+    local jobid=$1
+    local depth=$2
+    (( depth > max_depth )) && max_depth=$depth
+    for child in ${deps[$jobid]}; do
+        find_depth "$child" $((depth + 1))
     done
 }
 
-# Print top-level jobs (those not dependent on anything else)
 for job in "${!info[@]}"; do
-    # Job is a root if it's not listed as a dependent anywhere
-    is_root=true
+    is_dependent=false
     for children in "${deps[@]}"; do
         if grep -qw "$job" <<< "$children"; then
-            is_root=false
+            is_dependent=true
             break
         fi
     done
-    $is_root && print_tree "$job" ""
+    if ! $is_dependent; then
+        find_depth "$job" 0
+    fi
+done
+
+# Total width = 4 chars per depth level
+MAX_PREFIX_WIDTH=$((4 * (max_depth + 1)))
+
+make_prefix() {
+    local depth=$1
+    local has_children=$2
+    local is_root=$3
+
+    local prefix=""
+    if [[ "$is_root" == true ]]; then
+        prefix="════"
+        if [[ "$has_children" == true ]]; then
+            prefix+="╤═══"
+        fi
+        local fill_len=$((MAX_PREFIX_WIDTH - ${#prefix}))
+        prefix+="$(printf '═%.0s' $(seq 1 $fill_len))"
+    else
+        prefix="$(printf '    %.0s' $(seq 1 $depth))"
+        if [[ "$has_children" == true ]]; then
+            prefix+="└───┬"
+        else
+            prefix+="└──"
+        fi
+        local fill_len=$((MAX_PREFIX_WIDTH - ${#prefix}))
+        prefix+="$(printf '─%.0s' $(seq 1 $fill_len))"
+    fi
+    echo "$prefix"
+}
+
+print_tree() {
+    local jobid=$1
+    local depth=$2
+    local is_root=$3
+
+    local children="${deps[$jobid]}"
+    local has_children=false
+    [[ -n "$children" ]] && has_children=true
+
+    local prefix
+    prefix=$(make_prefix "$depth" "$has_children" "$is_root")
+    printf "%s %s\n" "$prefix" "${info[$jobid]}"
+
+    for child in $children; do
+        print_tree "$child" $((depth + 1)) false
+    done
+}
+
+# Print tree starting from root jobs
+for job in "${!info[@]}"; do
+    is_dependent=false
+    for children in "${deps[@]}"; do
+        if grep -qw "$job" <<< "$children"; then
+            is_dependent=true
+            break
+        fi
+    done
+    if ! $is_dependent; then
+        print_tree "$job" 0 true
+    fi
 done
 
