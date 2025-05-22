@@ -1,104 +1,128 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# qdep5 — Pretty SLURM dependency tree (May‑22‑2025)
+# -----------------------------------------------------------------------------
+# FEATURES
+#   • True roots (“════”) and orphan roots (“xxxx” + ✗ connectors).
+#   • Parents end with ┬; leaves end with a 3‑dash bar (─── / ✗✗✗).
+#   • Every line is padded with the appropriate dash/✗ so the job‑info columns
+#     all start in the same position, no stray bytes or mis‑alignment.
+#   • Width calculations use `wc ‑m` so multi‑byte Unicode characters are
+#     counted correctly.
+set -u  # abort on unset vars (no -e so non‑critical cmds don’t kill run)
 
-# Maps: parent -> (list of dependents)
-declare -A deps
-declare -A info
+################################################################################
+# 1. Collect active job IDs                                                   #
+################################################################################
+mapfile -t JOBIDS < <(squeue --me --noheader -o "%i")
+for i in "${!JOBIDS[@]}"; do JOBIDS[$i]="${JOBIDS[$i]//[[:space:]]/}"; done
+JOBSET=" ${JOBIDS[*]} "  # for quick membership test
 
-# Collect job info
-while IFS= read -r jobid; do
-    info["$jobid"]="$(squeue --me --noheader -j "$jobid")"
+################################################################################
+# 2. Build maps                                                               #
+################################################################################
+declare -A INFO CHILDREN PARENTS_ALL PARENTS_ACT
+for JOB in "${JOBIDS[@]}"; do
+  INFO[$JOB]="$(squeue --me --noheader -j "$JOB")"
+  dep=$(scontrol show job "$JOB" | grep -o 'Dependency=[^ ]*' || true)
+  [[ -z $dep || $dep == *"(null)"* ]] && continue
+  for P in $(grep -oE '[0-9]+' <<< "$dep"); do
+    PARENTS_ALL[$JOB]+=" $P"
+    if [[ $JOBSET == *" $P "* ]]; then
+      PARENTS_ACT[$JOB]+=" $P"
+      CHILDREN[$P]+=" $JOB"
+    fi
+  done
+done
 
-    dep_field=$(scontrol show job "$jobid" | grep -o 'Dependency=[^ ]*')
-    [[ -z "$dep_field" ]] && continue
+################################################################################
+# 3. Classify roots                                                           #
+################################################################################
+TRUE_ROOTS=() ORPHAN_ROOTS=()
+for JOB in "${JOBIDS[@]}"; do
+  if [[ -z ${PARENTS_ALL[$JOB]:-} ]]; then
+    TRUE_ROOTS+=("$JOB")
+  elif [[ -z ${PARENTS_ACT[$JOB]:-} ]]; then
+    ORPHAN_ROOTS+=("$JOB")
+  fi
+done
+IFS=$'\n' TRUE_ROOTS=($(sort -n <<< "${TRUE_ROOTS[*]}")); unset IFS
+IFS=$'\n' ORPHAN_ROOTS=($(sort -n <<< "${ORPHAN_ROOTS[*]}")); unset IFS
 
-    dep_ids=$(echo "$dep_field" | grep -oE '[0-9]+')
-    for parent in $dep_ids; do
-        deps["$parent"]+="$jobid "
-    done
-done < <(squeue --me --noheader -o "%i")
-
-# Determine max tree depth for proper alignment
+################################################################################
+# 4. Determine fixed prefix width                                             #
+################################################################################
 max_depth=0
-find_depth() {
-    local jobid=$1
-    local depth=$2
-    (( depth > max_depth )) && max_depth=$depth
-    for child in ${deps[$jobid]}; do
-        find_depth "$child" $((depth + 1))
-    done
+calc_depth(){ local j=$1 d=$2; (( d>max_depth )) && max_depth=$d; for c in ${CHILDREN[$j]:-}; do calc_depth "$c" $((d+1)); done; }
+for r in "${TRUE_ROOTS[@]}" "${ORPHAN_ROOTS[@]}"; do calc_depth "$r" 0; done
+CELL=4; PADW=$(( (max_depth+1)*CELL ))
+
+################################################################################
+# 5. Helper functions                                                         #
+################################################################################
+char_pad(){ # $1 count  $2 char – multibyte‑safe
+  local n=$1 ch=$2 buf
+  printf -v buf '%*s' "$n" ''   # $n spaces
+  printf '%s' "${buf// /$ch}"
 }
 
-for job in "${!info[@]}"; do
-    is_dependent=false
-    for children in "${deps[@]}"; do
-        if grep -qw "$job" <<< "$children"; then
-            is_dependent=true
-            break
-        fi
-    done
-    if ! $is_dependent; then
-        find_depth "$job" 0
-    fi
-done
-
-# Total width = 4 chars per depth level
-MAX_PREFIX_WIDTH=$((4 * (max_depth + 1)))
-
-make_prefix() {
-    local depth=$1
-    local has_children=$2
-    local is_root=$3
-
-    local prefix=""
-    if [[ "$is_root" == true ]]; then
-        prefix="════"
-        if [[ "$has_children" == true ]]; then
-            prefix+="╤═══"
-        fi
-        local fill_len=$((MAX_PREFIX_WIDTH - ${#prefix}))
-        prefix+="$(printf '═%.0s' $(seq 1 $fill_len))"
-    else
-        prefix="$(printf '    %.0s' $(seq 1 $depth))"
-        if [[ "$has_children" == true ]]; then
-            prefix+="└───┬"
-        else
-            prefix+="└──"
-        fi
-        local fill_len=$((MAX_PREFIX_WIDTH - ${#prefix}))
-        prefix+="$(printf '─%.0s' $(seq 1 $fill_len))"
-    fi
-    echo "$prefix"
+pad_print(){ # $1 prefix  $2 info – prints one fully‑padded line
+  local prefix="$1" info="$2"
+  local horiz
+  [[ $prefix == *✗* ]] && horiz='✗' || horiz='─'
+  local pre_len=$(printf '%s' "$prefix" | wc -m)
+    local fill=$(( PADW - pre_len - 1 ))
+  (( fill < 0 )) && fill=0
+   printf '%s' "$prefix"; char_pad "$fill" "$horiz"; printf ' %s
+' "$info"
+}
+banner(){ # $1 kind=root|orphan  $2 children true/false
+  local kind=$1 children=$2 base heavy
+  if [[ $kind == root ]]; then base='════'; heavy='═'; else base='xxxx'; heavy='x'; fi
+  [[ $children == true ]] && base+='╤' || base+=$heavy
+    local fill=$(( PADW - $(printf '%s' "$base" | wc -m) - 1 ))
+  printf '%s' "$base"; char_pad "$fill" "$heavy"
 }
 
-print_tree() {
-    local jobid=$1
-    local depth=$2
-    local is_root=$3
+print_subtree(){ # $1 job  $2 indent  $3 lastFlag (1 if this child is last)
+  local JOB=$1 indent="$2" last=$3
+  local -a kids=( ${CHILDREN[$JOB]:-} )
+  local has_kids=false; [[ ${#kids[@]} -gt 0 ]] && has_kids=true
 
-    local children="${deps[$jobid]}"
-    local has_children=false
-    [[ -n "$children" ]] && has_children=true
+  local horiz; [[ $indent == *✗* ]] && horiz='✗' || horiz='─'
+  local conn
+  if $has_kids; then
+    conn=$([[ $last -eq 1 ]] && echo "└${horiz}${horiz}┬" || echo "├${horiz}${horiz}┬")
+  else
+            conn=$([[ $last -eq 1 ]] && echo "└${horiz}${horiz}${horiz}" || echo "├${horiz}${horiz}${horiz}")
+  fi
+  pad_print "${indent}${conn}" "${INFO[$JOB]}"
 
-    local prefix
-    prefix=$(make_prefix "$depth" "$has_children" "$is_root")
-    printf "%s %s\n" "$prefix" "${info[$jobid]}"
-
-    for child in $children; do
-        print_tree "$child" $((depth + 1)) false
-    done
+  local cnt=${#kids[@]} idx=0 next_indent
+  for kid in "${kids[@]}"; do
+    ((idx++));             next_indent="$indent"$([[ $last -eq 1 ]] && echo '   ' || echo '│  ' )
+    print_subtree "$kid" "$next_indent" $(( idx==cnt ))
+  done
 }
 
-# Print tree starting from root jobs
-for job in "${!info[@]}"; do
-    is_dependent=false
-    for children in "${deps[@]}"; do
-        if grep -qw "$job" <<< "$children"; then
-            is_dependent=true
-            break
-        fi
-    done
-    if ! $is_dependent; then
-        print_tree "$job" 0 true
-    fi
-done
+print_root(){ # $1 job  $2 kind=root|orphan
+  local JOB=$1 kind=$2
+  local -a kids=( ${CHILDREN[$JOB]:-} )
+  pad_print "$(banner $kind $([[ ${#kids[@]} -gt 0 ]] && echo true || echo false))" "${INFO[$JOB]}"
+  local cnt=${#kids[@]} idx=0 first_indent
+  for kid in "${kids[@]}"; do
+    ((idx++)); first_indent=$([[ $idx -eq $cnt ]] && echo '    ' || echo '│   ' )
+    [[ $kind == orphan ]] && first_indent=${first_indent//│/✗}
+    print_subtree "$kid" "$first_indent" $(( idx==cnt ))
+  done
+}
+
+################################################################################
+# 6. Output                                                                   #
+################################################################################
+HEADER=$(squeue --me | head -n 1)
+printf '%*s%s\n' "$PADW" "" "$HEADER"
+for r in "${TRUE_ROOTS[@]}";   do print_root "$r" root;   echo; done
+for o in "${ORPHAN_ROOTS[@]}"; do print_root "$o" orphan; echo; done
+
+exit 0
 
