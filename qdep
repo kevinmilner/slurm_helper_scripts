@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
-# qdep5 — Pretty SLURM dependency tree (May‑22‑2025)
+# qdep — SLURM dependency tree (3‑char prefix blocks)
 # -----------------------------------------------------------------------------
-# FEATURES
-#   • True roots (“════”) and orphan roots (“xxxx” + ✗ connectors).
-#   • Parents end with ┬; leaves end with a 3‑dash bar (─── / ✗✗✗).
-#   • Every line is padded with the appropriate dash/✗ so the job‑info columns
-#     all start in the same position, no stray bytes or mis‑alignment.
-#   • Width calculations use `wc ‑m` so multi‑byte Unicode characters are
-#     counted correctly.
-set -u  # abort on unset vars (no -e so non‑critical cmds don’t kill run)
+# Allowed 3‑char blocks
+#   Roots:  "═══"  "╤══"  filler "═══" (or "xxx" for orphan banner)
+#   Child:  "   "  "│  "  "└──"  "├──"  "┬──"  filler "───"
+# Each depth adds exactly 3 chars, so prefix width = (maxDepth+1)*3.
+set -u
 
-################################################################################
-# 1. Collect active job IDs                                                   #
-################################################################################
+################################# 1. Collect jobs #############################
 mapfile -t JOBIDS < <(squeue --me --noheader -o "%i")
 for i in "${!JOBIDS[@]}"; do JOBIDS[$i]="${JOBIDS[$i]//[[:space:]]/}"; done
-JOBSET=" ${JOBIDS[*]} "  # for quick membership test
+JOBSET=" ${JOBIDS[*]} "
 
-################################################################################
-# 2. Build maps                                                               #
-################################################################################
+################################# 2. Maps #####################################
 declare -A INFO CHILDREN PARENTS_ALL PARENTS_ACT
 for JOB in "${JOBIDS[@]}"; do
   INFO[$JOB]="$(squeue --me --noheader -j "$JOB")"
@@ -34,95 +27,86 @@ for JOB in "${JOBIDS[@]}"; do
   done
 done
 
-################################################################################
-# 3. Classify roots                                                           #
-################################################################################
-TRUE_ROOTS=() ORPHAN_ROOTS=()
-for JOB in "${JOBIDS[@]}"; do
-  if [[ -z ${PARENTS_ALL[$JOB]:-} ]]; then
-    TRUE_ROOTS+=("$JOB")
-  elif [[ -z ${PARENTS_ACT[$JOB]:-} ]]; then
-    ORPHAN_ROOTS+=("$JOB")
+################################# 3. Roots ####################################
+# --- classify roots and orphans ---------------------------------------------
+ROOTS=(); ORPHAN_ROOTS=()
+for J in "${JOBIDS[@]}"; do
+  if [[ -z ${PARENTS_ALL[$J]:-} ]]; then
+    ROOTS+=("$J")                       # genuine root (no parents)
+  elif [[ -z ${PARENTS_ACT[$J]:-} ]]; then
+    ORPHAN_ROOTS+=("$J")                # all parents inactive → orphan
   fi
 done
-IFS=$'\n' TRUE_ROOTS=($(sort -n <<< "${TRUE_ROOTS[*]}")); unset IFS
-IFS=$'\n' ORPHAN_ROOTS=($(sort -n <<< "${ORPHAN_ROOTS[*]}")); unset IFS
+IFS=$'
+' ROOTS=($(sort -n <<< "${ROOTS[*]}")); unset IFS
+IFS=$'
+' ORPHAN_ROOTS=($(sort -n <<< "${ORPHAN_ROOTS[*]}")); unset IFS
 
-################################################################################
-# 4. Determine fixed prefix width                                             #
-################################################################################
+################################# 4. Depth & width ############################
 max_depth=0
 calc_depth(){ local j=$1 d=$2; (( d>max_depth )) && max_depth=$d; for c in ${CHILDREN[$j]:-}; do calc_depth "$c" $((d+1)); done; }
-for r in "${TRUE_ROOTS[@]}" "${ORPHAN_ROOTS[@]}"; do calc_depth "$r" 0; done
-CELL=4; PADW=$(( (max_depth+1)*CELL ))
+max_depth=0
+for r in "${ROOTS[@]}" "${ORPHAN_ROOTS[@]}"; do calc_depth "$r" 0; done
+PADW=$(( (max_depth+1)*3 ))
 
-################################################################################
-# 5. Helper functions                                                         #
-################################################################################
-char_pad(){ # $1 count  $2 char – multibyte‑safe
-  local n=$1 ch=$2 buf
-  printf -v buf '%*s' "$n" ''   # $n spaces
-  printf '%s' "${buf// /$ch}"
+################################# 5. Helpers ##################################
+rep(){ local n=$1 ch=$2; printf '%*s' "$n" '' | tr ' ' "$ch"; }
+clen(){ printf '%s' "$1" | wc -m; }
+
+root_banner(){ # $1 has_children(true/false)  $2 orphan(true/false)
+  local has=$1 orphan=$2
+  if $orphan; then                       # pure‑x banner for DependencyNeverSatisfied roots
+    printf '%s' "$(rep $PADW 'x')"
+    return
+  fi
+  local banner='═══'
+  $has && banner+='╤══'
+  local need=$(( PADW - $(clen "$banner") ))
+  while (( need >= 3 )); do banner+='═══'; need=$((need-3)); done
+  printf '%s' "$banner"
 }
 
-pad_print(){ # $1 prefix  $2 info – prints one fully‑padded line
-  local prefix="$1" info="$2"
-  local horiz
-  [[ $prefix == *✗* ]] && horiz='✗' || horiz='─'
-  local pre_len=$(printf '%s' "$prefix" | wc -m)
-    local fill=$(( PADW - pre_len - 1 ))
-  (( fill < 0 )) && fill=0
-   printf '%s' "$prefix"; char_pad "$fill" "$horiz"; printf ' %s
-' "$info"
-}
-banner(){ # $1 kind=root|orphan  $2 children true/false
-  local kind=$1 children=$2 base heavy
-  if [[ $kind == root ]]; then base='════'; heavy='═'; else base='xxxx'; heavy='x'; fi
-  [[ $children == true ]] && base+='╤' || base+=$heavy
-    local fill=$(( PADW - $(printf '%s' "$base" | wc -m) - 1 ))
-  printf '%s' "$base"; char_pad "$fill" "$heavy"
-}
+print_line(){ printf '%s %s\n' "$1" "$2"; }
 
-print_subtree(){ # $1 job  $2 indent  $3 lastFlag (1 if this child is last)
+print_tree(){ # $1 job  $2 indent (mult of 3 chars)  $3 lastFlag
   local JOB=$1 indent="$2" last=$3
-  local -a kids=( ${CHILDREN[$JOB]:-} )
+  local kids=( ${CHILDREN[$JOB]:-} )
   local has_kids=false; [[ ${#kids[@]} -gt 0 ]] && has_kids=true
 
-  local horiz; [[ $indent == *✗* ]] && horiz='✗' || horiz='─'
-  local conn
-  if $has_kids; then
-    conn=$([[ $last -eq 1 ]] && echo "└${horiz}${horiz}┬" || echo "├${horiz}${horiz}┬")
-  else
-            conn=$([[ $last -eq 1 ]] && echo "└${horiz}${horiz}${horiz}" || echo "├${horiz}${horiz}${horiz}")
-  fi
-  pad_print "${indent}${conn}" "${INFO[$JOB]}"
+  local pref="${indent}$([[ $last -eq 1 ]] && echo '└──' || echo '├──')"
+  $has_kids && pref+='┬──'
+  local remain=$(( PADW - $(clen "$pref") ))
+  while (( remain >= 3 )); do pref+='───'; remain=$(( remain-3 )); done
+  print_line "$pref" "${INFO[$JOB]}"
 
-  local cnt=${#kids[@]} idx=0 next_indent
-  for kid in "${kids[@]}"; do
-    ((idx++));             next_indent="$indent"$([[ $last -eq 1 ]] && echo '   ' || echo '│  ' )
-    print_subtree "$kid" "$next_indent" $(( idx==cnt ))
-  done
+  local cnt=${#kids[@]} idx=0 child_indent
+  child_indent="$indent"$([[ $last -eq 1 ]] && echo '   ' || echo '│  ')
+  
+  for kid in "${kids[@]}"; do ((idx++)); print_tree "$kid" "$child_indent" $(( idx==cnt )); done
 }
 
-print_root(){ # $1 job  $2 kind=root|orphan
-  local JOB=$1 kind=$2
-  local -a kids=( ${CHILDREN[$JOB]:-} )
-  pad_print "$(banner $kind $([[ ${#kids[@]} -gt 0 ]] && echo true || echo false))" "${INFO[$JOB]}"
-  local cnt=${#kids[@]} idx=0 first_indent
-  for kid in "${kids[@]}"; do
-    ((idx++)); first_indent=$([[ $idx -eq $cnt ]] && echo '    ' || echo '│   ' )
-    [[ $kind == orphan ]] && first_indent=${first_indent//│/✗}
-    print_subtree "$kid" "$first_indent" $(( idx==cnt ))
-  done
-}
-
-################################################################################
-# 6. Output                                                                   #
-################################################################################
+################################# 6. Output ###################################
 HEADER=$(squeue --me | head -n 1)
-printf '%*s%s\n' "$PADW" "" "$HEADER"
-for r in "${TRUE_ROOTS[@]}";   do print_root "$r" root;   echo; done
-for o in "${ORPHAN_ROOTS[@]}"; do print_root "$o" orphan; echo; done
+printf '%*s%s\n' "$PADW" '' " $HEADER"
+for root in "${ROOTS[@]}"; do
+  orphan=false; [[ -n ${PARENTS_ACT[$root]:-} && -n ${PARENTS_ALL[$root]:-} ]] && orphan=true
+  has_child=false; [[ -n ${CHILDREN[$root]:-} ]] && has_child=true
+  print_line "$(root_banner $has_child $orphan)" "${INFO[$root]}"
+  root_kids=( ${CHILDREN[$root]:-} )
+  cnt=${#root_kids[@]} idx=0
+  for kid in "${root_kids[@]}"; do ((idx++)); print_tree "$kid" '   ' $(( idx==cnt )); done
+  echo
+done
+
+# --- print orphan roots ------------------------------------------------------
+for orphan in "${ORPHAN_ROOTS[@]}"; do
+  has_child=false; [[ -n ${CHILDREN[$orphan]:-} ]] && has_child=true
+  print_line "$(root_banner $has_child true)" "${INFO[$orphan]}"
+  orphan_kids=( ${CHILDREN[$orphan]:-} )
+  cnt=${#orphan_kids[@]} idx=0
+  for kid in "${orphan_kids[@]}"; do ((idx++)); print_tree "$kid" '   ' $(( idx==cnt )); done
+  echo
+done
 
 exit 0
 
