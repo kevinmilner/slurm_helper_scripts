@@ -1,0 +1,3 @@
+#!/bin/bash
+
+qdep | cust_header_tail

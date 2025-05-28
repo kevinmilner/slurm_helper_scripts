@@ -1,75 +1,86 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
+"""
+Summarise Slurm jobs by user for a given queue.
 
-import os, sys, subprocess
+Usage:
+    queue_check.py [--full] <queue>
+"""
 
-queue=None 
+import sys
+import subprocess
 
-full = False
+def main() -> None:
+    # ------------------------------------------------------------------ argparse-lite
+    full = False
+    if len(sys.argv) == 2:
+        queue = sys.argv[1]
+    elif len(sys.argv) == 3 and sys.argv[1] == "--full":
+        full = True
+        queue = sys.argv[2]
+    else:
+        print("USAGE: [--full] <queue>")
+        sys.exit(1)
 
-if len(sys.argv) == 2:
-	queue = sys.argv[1]
-elif len(sys.argv) == 3 and sys.argv[1] == "--full":
-	full = True
-	queue = sys.argv[2]
-else:
-	print("USAGE: [--full] <queue>")
-	sys.exit(1)
-    
+    # ------------------------------------------------------------------ query squeue
+    cmd = f'squeue -o "%.18i %.20P %.20u %.2t %.6D" | grep {queue}'
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode not in (0, 1):          # 1 means grep found nothing
+        print(result.stderr, file=sys.stderr)
+        sys.exit(result.returncode)
 
-command = "squeue -o \"%.18i %.20P %.20u %.2t %.6D\" | grep " + queue
+    # ------------------------------------------------------------------ parse output
+    users              = []
+    user_queued_jobs   = {}
+    user_running_jobs  = {}
+    user_nodes         = {}
 
-proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    queued_jobs  = 0
+    running_jobs = 0
+    used_nodes   = 0
 
-output = proc.communicate()
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 5:
+            job_id, _, user, state, nodes = fields
+            nodes = int(nodes)
+            if user not in users:
+                users.append(user)
+                user_queued_jobs[user]  = []
+                user_running_jobs[user] = []
+                user_nodes[user]        = 0
 
-users = []
-userQueuedJobs = {}
-userRunningJobs = {}
-userNodes = {}
+            if state == "R":
+                user_running_jobs[user].append(job_id)
+                running_jobs          += 1
+                user_nodes[user]      += nodes
+                used_nodes            += nodes
+            else:
+                user_queued_jobs[user].append(job_id)
+                queued_jobs += 1
+        elif fields:   # non-empty line but unexpected format
+            print(f"bad split (len {len(fields)}): {fields}", file=sys.stderr)
 
-queuedJobs = 0
-runningJobs = 0
-usedNodes = 0
+    # ------------------------------------------------------------------ top-level summary
+    print(f"{len(users)} users running {running_jobs} jobs on "
+          f"{used_nodes} nodes, {queued_jobs} queued jobs")
 
-for line1 in output[0].split("\\n"):
-	for line in line1.split("\n"):
-		split = line.split()
-		if len(split) == 5:
-			job = split[0]
-			user = split[2]
-			state = split[3]
-			nodes = int(split[4])
-			if user not in users:
-				users.append(user)
-				userQueuedJobs[user] = []
-				userRunningJobs[user] = []
-				userNodes[user] = 0
-			if state == "R":
-				userRunningJobs[user].append(job)
-				runningJobs += 1
-				userNodes[user] += nodes
-				usedNodes += nodes
-			else:
-				userQueuedJobs[user].append(job)
-				queuedJobs += 1
-		elif len(split) > 0:
-			print "bad split (len " + str(len(split)) + "): " + str(split)
+    tot_nodes = 0
+    for user in users:
+        running = user_running_jobs[user]
+        queued  = user_queued_jobs[user]
+        nodes   = user_nodes[user]
+        print(f"user: {user},\trunning: {len(running)} ({nodes} nodes),"
+              f"\tqueued: {len(queued)}")
+        tot_nodes += nodes
+    print(f"Total nodes in use: {tot_nodes}")
 
-print str(len(users))+" users running "+str(runningJobs)+" jobs on "+str(usedNodes)+" nodes, "+str(queuedJobs)+" queued jobs"
+    # ------------------------------------------------------------------ full per-user listing
+    if full:
+        for user in users:
+            cmd = f"squeue -u {user}"
+            out = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout
+            print(out, end="")                     # already contains newlines
 
-totNodes = 0
-for user in users:
-	runningJobs = userRunningJobs[user]
-	queuedJobs = userQueuedJobs[user]
-	nodes = userNodes[user]
-	print "user: " + user + ",\trunning: " + str(len(runningJobs)) + " (" + str(nodes) + " nodes),\tqueued: " + str(len(queuedJobs))
-	totNodes += nodes
-print "Total nodes in use: " + str(totNodes)
+if __name__ == "__main__":
+    main()
 
-if full:
-	for user in users:
-		command = "squeue -u " + user
-		proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out = proc.communicate()[0]
-		for line1 in out.split("\\n"):
-			print line1

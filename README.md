@@ -18,7 +18,7 @@ For example, if you were to submit a script called script.slurm with this tool a
 
 To submit a job with a dependency on another job, use `slurm_depend_submit.sh`. The submitted job will wait until the supplied dependencies complete successfully.
 
-It takes a SLURM script as the first argument, and the Job ID('s) it depends on as the 2nd argument. Multiple dependencies can be specified as `<jobID11>:<jobID2>:<jobIDN>`. Alternatively, if you omit the Job ID argument, the most recently submitted script with the `slurm_submit.sh` command will be used as the dependency.
+It takes a SLURM script as the first argument, and the Job ID(s) it depends on as the 2nd argument. Multiple dependencies can be specified as `<jobID11>:<jobID2>:<jobIDN>`. Alternatively, if you omit the Job ID argument, the most recently submitted script with the `slurm_submit.sh` command will be used as the dependency.
 
 Single job dependency on job 111:
 
@@ -48,9 +48,23 @@ Use the `qme` command (q for see the queue, me for me/you) to see running jobs:
           19347546      scec du_repor  kmilner  R       7:37      1 e19-12
 ```
 
-This is just a handy alias for `squeue -u $USER`
+This is just a handy alias for `squeue --me`
 
 If you want to watch the output of that command, use `wqme` instead (w for watch). When you're done, hit ctrl+c to exit. This is just a handy alias for `watch -n 10 squeue -u $USER`
+
+## See running jobs with a dependency graph: qdep or wqdep
+
+Use the `qdep` command to see running jobs in a dependency graph view:
+
+```
+[kmilner@endeavour1 ~]$ qdep
+              JOBID PARTITION                           NAME     USER ST       TIME  NODES NODELIST(REASON)
+══════       962250 scec_hipr                    interactive  kmilner  R   22:11:54      1 e20-03
+
+═══╤══       967683 scec_hipr crustal_subduction_maps_combin  kmilner  R       7:10      1 e20-04
+   ├──       967685 scec_hipr plot_full_hazard_comp_reg.slur  kmilner PD       0:00      1 (Dependency)
+   └──       967684 scec_hipr         plot_full_hazard.slurm  kmilner PD       0:00      1 (Dependency)
+```
 
 ## Tail STDOUT: stdout_job_tail.sh
 
