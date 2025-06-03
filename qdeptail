@@ -1,3 +1,3 @@
 #!/bin/bash
 
-qdep | cust_header_tail
+qdep | cust_header_tail $@
