@@ -1,3 +1,3 @@
 #!/bin/bash
 
-watch -n 10 qdeptail $@
+watch -n 20 qdeptail $@
