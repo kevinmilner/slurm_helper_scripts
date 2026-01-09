@@ -22,7 +22,7 @@ fi
 # try to get it directly
 OUT=`scontrol show jobID $ID | grep StdOut | cut -d "=" -f2-` 2> /dev/null
 
-if [[ -e $OUT ]];then
+if [[ ! -e $OUT ]];then
 	DIR=`squeue -h -j $ID -o %Z`
 	
 	if [[ ! -e $DIR ]];then
