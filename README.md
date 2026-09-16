@@ -36,6 +36,34 @@ If you want to chain dependencies and instead submit a job dependent on the most
 
 `slurm_chained_depend_submit.sh dependent_job.slurm`
 
+## Enable job completion email: slurm_mail.sh or slurm_mail_me.sh
+
+To enable email on completion or failure for existing jobs, pass an email address followed by one or more job IDs:
+
+```bash
+slurm_mail.sh you@example.com 7939431 7939447
+```
+
+To apply the same settings to all of your current jobs, including queued and running jobs:
+
+```bash
+slurm_mail_me.sh you@example.com
+```
+
+You can set a default email address in `SLURM_EMAIL` (for example, in `~/.bashrc`) and omit the email argument:
+
+```bash
+export SLURM_EMAIL=you@example.com
+slurm_mail.sh 7939431 7939447
+slurm_mail_me.sh
+```
+
+An explicit email argument overrides `SLURM_EMAIL`. An unset or empty variable requires an explicit address.
+
+These commands set `MailUser` and replace the mail-event selection with `END,FAIL`. They do not resubmit jobs or affect future submissions. Email delivery requires cluster mail support. The all-jobs command queries `squeue --me` across all states and expands array tasks; it updates the jobs found at that moment. Array email follows Slurm's default array-level notification behavior (these scripts do not enable `ARRAY_TASKS`).
+
+If a job finishes or disappears during the update, or another update fails, the scripts report the failure, continue with the remaining jobs, and exit nonzero. Updates that already succeeded remain applied.
+
 ## See running jobs: qme or wqme
 
 Use the `qme` command (q for see the queue, me for me/you) to see running jobs:
