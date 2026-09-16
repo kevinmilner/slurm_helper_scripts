@@ -34,13 +34,18 @@ if [[ ! -z $SLURM_ACCT ]];then
 	ACCT_ARG="-A $SLURM_ACCT"
 fi
 
-OUTPUT=`sbatch $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j --dependency=afterok:$JOB_ID $SCRIPT`
+OUTPUT=`sbatch --parsable $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j --dependency=afterok:$JOB_ID $SCRIPT`
 RET=$?
 
-echo $OUTPUT
+printf '%s\n' "$OUTPUT"
 if [[ $RET -eq 0 ]];then
-	JOB_ID=`echo $OUTPUT | awk '{print $4}'`
-	if [[ $JOB_ID -gt 0 ]];then
+	JOB_ID=${OUTPUT##*$'\n'}
+	if [[ ! $JOB_ID =~ ^[0-9]+(\;[^[:space:];]+)?$ || ! ${JOB_ID%%;*} =~ [1-9] ]];then
+		echo "sbatch succeeded, but its final output line did not contain a valid job ID; previous ID file left unchanged. Do not resubmit blindly." >&2
+		exit 1
+	fi
+	JOB_ID=${JOB_ID%%;*}
+	if [[ $JOB_ID =~ [1-9] ]];then
 		echo $JOB_ID > $OUT_SLURM_ID_FILE
 	fi
 fi

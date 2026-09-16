@@ -35,12 +35,17 @@ for FILE in $@;do
 	fi
 	cd $DIR
 	
-	OUTPUT=`sbatch $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j $SCRIPT`
+	OUTPUT=`sbatch --parsable $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j $SCRIPT`
 	RET=$?
-	echo $OUTPUT
+	printf '%s\n' "$OUTPUT"
 	if [[ $RET -eq 0 ]];then
-		JOB_ID=`echo $OUTPUT | awk '{print $4}'`
-		if [[ $JOB_ID -gt 0 ]];then
+		JOB_ID=${OUTPUT##*$'\n'}
+		if [[ ! $JOB_ID =~ ^[0-9]+(\;[^[:space:];]+)?$ || ! ${JOB_ID%%;*} =~ [1-9] ]];then
+			echo "sbatch succeeded, but its final output line did not contain a valid job ID; previous ID file left unchanged. Do not resubmit blindly." >&2
+			exit 1
+		fi
+		JOB_ID=${JOB_ID%%;*}
+		if [[ $JOB_ID =~ [1-9] ]];then
 			if [[ $JOB_IDS ]];then
 				JOB_IDS="$JOB_IDS,$JOB_ID"
 			else
@@ -51,5 +56,7 @@ for FILE in $@;do
 		break
 	fi
 done
-echo $JOB_IDS > $SLURM_ID_FILE
+if [[ $RET -eq 0 ]];then
+	printf '%s\n' "$JOB_IDS" > "$SLURM_ID_FILE"
+fi
 exit $RET
