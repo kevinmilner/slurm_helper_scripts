@@ -37,17 +37,28 @@ fi
 OUTPUT=`sbatch --parsable $ACCT_ARG -o ${SCRIPT}.o%j -e ${SCRIPT}.e%j --dependency=afterok:$JOB_ID $SCRIPT`
 RET=$?
 
-printf '%s\n' "$OUTPUT"
 if [[ $RET -eq 0 ]];then
 	JOB_ID=${OUTPUT##*$'\n'}
 	if [[ ! $JOB_ID =~ ^[0-9]+(\;[^[:space:];]+)?$ || ! ${JOB_ID%%;*} =~ [1-9] ]];then
+		printf '%s\n' "$OUTPUT"
 		echo "sbatch succeeded, but its final output line did not contain a valid job ID; previous ID file left unchanged. Do not resubmit blindly." >&2
 		exit 1
+	fi
+	# Preserve site messages, but display the usual human-readable confirmation.
+	if [[ $OUTPUT == *$'\n'* ]];then
+		printf '%s\n' "${OUTPUT%$'\n'*}"
+	fi
+	if [[ $JOB_ID == *';'* ]];then
+		printf 'Submitted batch job %s on cluster %s\n' "${JOB_ID%%;*}" "${JOB_ID#*;}"
+	else
+		printf 'Submitted batch job %s\n' "$JOB_ID"
 	fi
 	JOB_ID=${JOB_ID%%;*}
 	if [[ $JOB_ID =~ [1-9] ]];then
 		echo $JOB_ID > $OUT_SLURM_ID_FILE
 	fi
+else
+	printf '%s\n' "$OUTPUT"
 fi
 
 exit $RET
